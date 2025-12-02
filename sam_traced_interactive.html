@@ -3,7 +3,8 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"> <title>SAM Traced Interactive Map</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>SAM Traced Interactive Map</title>
     <style>
         body { 
             font-family: sans-serif; 
@@ -13,26 +14,18 @@
             align-items: center; 
             min-height: 100vh;
             margin: 0;
-            overflow: hidden; /* 모바일에서 전체 페이지 스크롤 방지 */
+            overflow: hidden; 
         }
         .map-container { 
             position: relative; 
-            /* 이미지 비율 유지 */
-            width: 90vw; /* 화면 너비에 맞게 조절 */
+            width: 90vw; 
             max-width: 963px; 
-            height: calc(90vw * 1164 / 963); /* 비율에 맞게 높이 계산 */
+            height: calc(90vw * 1164 / 963); 
             max-height: 1164px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            touch-action: none; /* 💡 기본 터치 동작 방지 (매우 중요) */
+            touch-action: none; 
         }
-        .bg-image {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            z-index: 1;
-            opacity: 0.9;
-        }
+        
         svg { 
             position: absolute; 
             top: 0; 
@@ -41,6 +34,11 @@
             width: 100%; 
             height: 100%;
         }
+
+        .bg-image-svg {
+            opacity: 0.9;
+        }
+        
         .seat-section { 
             transition: fill-opacity 0.2s, stroke 0.2s, stroke-width 0.2s; 
             cursor: pointer; 
@@ -48,6 +46,7 @@
         .seat-section:hover { 
             fill-opacity: 0.8 !important; 
         }
+        /* 💡 클릭 상태의 스타일은 줌 레벨과 상관없이 유지 */
         .seat-section.clicked {
             fill-opacity: 1.0 !important;
             fill: #0000004d; 
@@ -62,13 +61,22 @@
 <body>
 
 <div class="map-container">
-    <img src="test.jpg" class="bg-image" alt="Original Layout">
     <svg 
         viewBox="0 0 963 1164" 
         xmlns="http://www.w3.org/2000/svg" 
         id="stadiumSvg"
         preserveAspectRatio="xMidYMid meet"
     >
+        <image 
+            href="test.jpg" 
+            x="0" y="0" 
+            width="963" 
+            height="1164" 
+            preserveAspectRatio="xMidYMid meet" 
+            class="bg-image-svg"
+            style="pointer-events: none;" 
+        />
+
         <g id="extracted-paths">
             
         <path 
@@ -1452,22 +1460,44 @@
     const ORIGINAL_W = 963;
     const ORIGINAL_H = 1164;
     
-    let currentX = 0; // ViewBox x coordinate
-    let currentY = 0; // ViewBox y coordinate
-    let currentW = ORIGINAL_W; // ViewBox width
-    let currentH = ORIGINAL_H; // ViewBox height
+    // 💡 줌 레벨 기반 색상 변경 설정
+    const DEFAULT_PATH_COLOR = "#00000000"; // 투명색 (#00000000)
+    const ZOOM_THRESHOLD = 3.0; // 3배 이상 확대 시
+    const ZOOMED_COLOR = '#000000'; // 검은색
+    const ZOOMED_OPACITY = '0.2'; // 20% 투명도
+
+    let currentX = 0; 
+    let currentY = 0; 
+    let currentW = ORIGINAL_W; 
+    let currentH = ORIGINAL_H; 
     let isDragging = false;
     let lastPoint = null;
     let initialPinchDistance = null;
 
-    // 줌 레벨을 ViewBox에 적용하는 함수
     function applyViewBox() {
         svg.setAttribute('viewBox', `${currentX} ${currentY} ${currentW} ${currentH}`);
     }
 
-    // 두 점 사이의 거리 계산 (핀치 줌용)
     function getDistance(p1, p2) {
         return Math.sqrt(Math.pow(p2.clientX - p1.clientX, 2) + Math.pow(p2.clientY - p1.clientY, 2));
+    }
+
+    // 💡 새로 추가된 함수: 줌 레벨에 따라 Path 색상 업데이트
+    function updatePathColorBasedOnZoom() {
+        const currentScale = ORIGINAL_W / currentW;
+        
+        allPaths.forEach(path => {
+            // 클릭되지 않은 Path만 색상 및 투명도 변경
+            if (path.getAttribute('data-clicked') === 'false') {
+                if (currentScale >= ZOOM_THRESHOLD) {
+                    path.setAttribute('fill', ZOOMED_COLOR);
+                    path.setAttribute('fill-opacity', ZOOMED_OPACITY);
+                } else {
+                    path.setAttribute('fill', DEFAULT_PATH_COLOR);
+                    path.setAttribute('fill-opacity', '0.6'); // 원래의 투명도 유지
+                }
+            }
+        });
     }
 
     // ----------------------------------------------------
@@ -1475,17 +1505,14 @@
     // ----------------------------------------------------
 
     svg.addEventListener('touchstart', (e) => {
-        // 두 손가락 터치 시 기본 동작(스크롤, 확대 등) 방지
         if (e.touches.length > 1) {
             e.preventDefault();
         }
         
         if (e.touches.length === 1) {
-            // 한 손가락: 드래그 시작
             isDragging = true;
             lastPoint = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         } else if (e.touches.length === 2) {
-            // 두 손가락: 핀치 줌 시작
             initialPinchDistance = getDistance(e.touches[0], e.touches[1]);
         }
     }, { passive: false });
@@ -1498,38 +1525,39 @@
             const currentPinchDistance = getDistance(e.touches[0], e.touches[1]);
             const scaleFactor = currentPinchDistance / initialPinchDistance;
             
-            // 현재 스케일 계산
             const currentScale = ORIGINAL_W / currentW;
 
-            // 새로운 스케일 적용 (1.0 ~ 5.0 사이로 제한)
+            // 줌 범위 제한 (1.0배 ~ 5.0배)
             let newScale = currentScale * scaleFactor;
             newScale = Math.max(1.0, Math.min(5.0, newScale)); 
             
-            // ViewBox 너비/높이 업데이트
             currentW = ORIGINAL_W / newScale;
             currentH = ORIGINAL_H / newScale;
             
-            // 줌 인/아웃 시 중심점 유지 (간단한 구현)
-            const centerX = currentX + currentW / 2;
-            const centerY = currentY + currentH / 2;
+            // 중심점 유지
+            const centerX = currentX + (ORIGINAL_W / currentScale) / 2;
+            const centerY = currentY + (ORIGINAL_H / currentScale) / 2;
+            
             currentX = centerX - currentW / 2;
             currentY = centerY - currentH / 2;
 
+            currentX = Math.max(0, Math.min(ORIGINAL_W - currentW, currentX));
+            currentY = Math.max(0, Math.min(ORIGINAL_H - currentH, currentY));
+            
             applyViewBox();
-            initialPinchDistance = currentPinchDistance; // 다음 이동을 위해 초기 거리 업데이트
+            updatePathColorBasedOnZoom(); // 💡 줌 변경 후 색상 업데이트 호출
+            initialPinchDistance = currentPinchDistance; 
 
         } else if (isDragging && e.touches.length === 1) {
             // 패닝 (드래그)
             const dx = e.touches[0].clientX - lastPoint.x;
             const dy = e.touches[0].clientY - lastPoint.y;
             
-            // 줌 레벨에 따라 드래그 속도 조정 (ViewBox 좌표계로 변환)
             const scaleRatio = currentW / svg.clientWidth; 
             
             currentX -= dx * scaleRatio;
             currentY -= dy * scaleRatio;
 
-            // ViewBox 경계 제한 (옵션): 이미지를 벗어나지 않도록
             currentX = Math.max(0, Math.min(ORIGINAL_W - currentW, currentX));
             currentY = Math.max(0, Math.min(ORIGINAL_H - currentH, currentY));
             
@@ -1543,19 +1571,20 @@
         if (e.touches.length < 2) {
             initialPinchDistance = null;
         }
+        // 줌 종료 시에도 색상 상태를 한 번 더 확인
+        updatePathColorBasedOnZoom(); 
     });
 
     // ----------------------------------------------------
-    // 💡 인터랙션 (클릭/툴팁) 로직 (기존 유지)
+    // 💡 인터랙션 (클릭/툴팁) 로직
     // ----------------------------------------------------
 
     allPaths.forEach(path => {
-        // 툴팁 (마우스 오버) 로직
+        // ... (클릭 및 툴팁 로직은 이전과 동일) ...
         path.addEventListener('mousemove', (e) => {
             const label = path.getAttribute('data-label');
             tooltip.style.display = 'block';
             tooltip.textContent = label;
-            // 툴팁 위치는 화면 좌표(pageX, pageY)를 사용합니다.
             tooltip.style.left = e.pageX + 15 + 'px';
             tooltip.style.top = e.pageY + 15 + 'px';
         });
@@ -1563,23 +1592,31 @@
             tooltip.style.display = 'none';
         });
         
-        // 클릭 로직: 단일 선택 및 초기화
         path.addEventListener('click', () => {
-            // 줌/팬 동작 중에는 클릭 이벤트를 무시할 수 있으나, 여기서는 단순화하여 처리
             const isClicked = path.getAttribute('data-clicked') === 'true';
 
             allPaths.forEach(p => {
                 p.classList.remove('clicked');
                 p.setAttribute('data-clicked', 'false');
+                // 💡 클릭 해제 시 줌 레벨에 따라 색상을 복원해야 함
+                updatePathColorBasedOnZoom(); 
             });
             
             if (!isClicked) {
                 path.classList.add('clicked');
                 path.setAttribute('data-clicked', 'true');
                 console.log("Selected ID:", path.id); 
+                
+                // 💡 클릭된 Path는 줌 레벨에 관계없이 클릭 스타일 유지
+                path.setAttribute('fill', '#0000004d'); 
+                path.setAttribute('fill-opacity', '1.0');
             }
         });
     });
+    
+    // 초기 로딩 시 색상 설정
+    updatePathColorBasedOnZoom();
+
 </script>
 </body>
 </html>
