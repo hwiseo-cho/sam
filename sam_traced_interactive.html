@@ -1462,7 +1462,7 @@
     
     // 💡 줌 레벨 기반 색상 변경 설정
     const DEFAULT_PATH_COLOR = "#00000000"; // 투명색 (#00000000)
-    const ZOOM_THRESHOLD = 3.0; // 3배 이상 확대 시
+    const ZOOM_THRESHOLD = 2.0; // 3배 이상 확대 시
     const ZOOMED_COLOR = '#000000'; // 검은색
     const ZOOMED_OPACITY = '0.2'; // 20% 투명도
 
@@ -1491,7 +1491,6 @@
             if (path.getAttribute('data-clicked') === 'false') {
                 if (currentScale >= ZOOM_THRESHOLD) {
                     path.setAttribute('fill', ZOOMED_COLOR);
-                    path.setAttribute('fill-opacity', ZOOMED_OPACITY);
                 } else {
                     path.setAttribute('fill', DEFAULT_PATH_COLOR);
                     path.setAttribute('fill-opacity', '0.6'); // 원래의 투명도 유지
